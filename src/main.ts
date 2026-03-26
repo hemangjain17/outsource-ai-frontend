@@ -63,6 +63,10 @@ function navigateTo(route: string) {
       pageTitle.textContent = 'Campaigns';
       renderCampaigns();
       break;
+    case 'tasks_assign':
+      pageTitle.textContent = 'Task Assignment';
+      renderTasksAssign();
+      break;
     case 'logs':
       pageTitle.textContent = 'Pipeline Logs';
       renderLogs();
@@ -230,6 +234,12 @@ function renderOnboarding() {
           </div>
           <div style="font-size: 14px; color: var(--text-muted);">${c.data.onboarding?.description || 'No description provided.'}</div>
           <div style="font-size: 12px; margin-top: 4px;">ID: <code>${c.company_id}</code></div>
+          
+          <div style="margin-top: 8px; font-size: 12px; color: var(--text-muted);" id="stats-container-${c.company_id}">
+            <button class="btn load-stats-btn" data-id="${c.company_id}" style="padding: 4px 8px; font-size: 11px; margin-right: 8px; background: rgba(37, 99, 235, 0.2); color: var(--primary);">Load Realtime Stats</button>
+            <span class="stats-text" id="stats-text-${c.company_id}" style="display: none;"></span>
+          </div>
+
           <div style="margin-top: 8px;">
             <button class="btn switch-btn" data-id="${c.company_id}" style="padding: 6px 12px; font-size: 12px;">Select Profile Context</button>
           </div>
@@ -244,6 +254,33 @@ function renderOnboarding() {
             localStorage.setItem('company_id', currentCompanyId);
             updateStatusBadge();
             alert('Switched active company context to: ' + targetId);
+          }
+        });
+      });
+
+      document.querySelectorAll('.load-stats-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const target = e.target as HTMLButtonElement;
+          const companyId = target.getAttribute('data-id');
+          if (!companyId) return;
+          
+          const textSpan = document.getElementById('stats-text-' + companyId);
+          if (!textSpan) return;
+
+          target.textContent = 'Loading...';
+          target.disabled = true;
+          
+          try {
+            const [campData, contData] = await Promise.all([
+              ApiService.getCampaigns(companyId),
+              ApiService.getContent(companyId)
+            ]);
+            
+            target.style.display = 'none';
+            textSpan.style.display = 'inline-block';
+            textSpan.innerHTML = `<strong>Campaigns:</strong> ${campData.total || 0} &nbsp;|&nbsp; <strong>Content Items:</strong> ${contData.total || 0}`;
+          } catch (err: any) {
+            target.textContent = 'Failed to load';
           }
         });
       });
@@ -282,7 +319,97 @@ function renderOnboarding() {
   });
 }
 
-function renderCampaigns() {
+async function renderTasksAssign() {
+  viewContainer.innerHTML = `<div class="empty-state">Loading companies...</div>`;
+  try {
+    const dbData = await ApiService.getCompanies();
+    if (!dbData.companies || dbData.companies.length === 0) {
+      viewContainer.innerHTML = `<div class="empty-state">No companies onboarded. Please onboard a company first to assign tasks.</div>`;
+      return;
+    }
+    
+    const optionsHtml = dbData.companies.map((c: any) => {
+      const name = c.data.onboarding?.company_name || c.company_id;
+      const desc = c.data.onboarding?.description || 'No description';
+      const maxDesc = desc.length > 50 ? desc.substring(0, 50) + '...' : desc;
+      return `<option value="${c.company_id}" ${c.company_id === currentCompanyId ? 'selected' : ''}>${name} - ${maxDesc}</option>`;
+    }).join('');
+
+    viewContainer.innerHTML = `
+      <div class="card" style="max-width: 800px; margin: 0 auto;">
+        <h2 style="margin-bottom: 24px;">Assign Task to Company Agent</h2>
+        <form id="assign-task-form">
+          <div class="form-group">
+            <label>Select Company *</label>
+            <select id="task_company_id" required>
+              <option value="" disabled>Select a company...</option>
+              ${optionsHtml}
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label>Task Title *</label>
+            <input type="text" id="task_title" required placeholder="e.g. Write a blog post about AI">
+          </div>
+          
+          <div class="form-group">
+            <label>Task Description *</label>
+            <textarea id="task_description" required rows="5" placeholder="Detailed instructions for the agent..."></textarea>
+          </div>
+          
+          <div class="form-group">
+            <label>Assign To Agent</label>
+            <select id="task_agent" required>
+              <option value="strategist">Strategist</option>
+              <option value="planner">Planner</option>
+              <option value="content_generator">Content Generator</option>
+              <option value="designer">Designer</option>
+              <option value="manager" selected>Manager</option>
+            </select>
+          </div>
+          
+          <button type="submit" class="btn" id="submit-task-btn" style="width: 100%; margin-top: 12px;">Assign Task</button>
+        </form>
+      </div>
+    `;
+
+    document.getElementById('assign-task-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('submit-task-btn') as HTMLButtonElement;
+      btn.textContent = 'Assigning...';
+      btn.disabled = true;
+      
+      const companyId = (document.getElementById('task_company_id') as HTMLSelectElement).value;
+      const payload = {
+        title: (document.getElementById('task_title') as HTMLInputElement).value,
+        description: (document.getElementById('task_description') as HTMLTextAreaElement).value,
+        assigned_to: (document.getElementById('task_agent') as HTMLSelectElement).value,
+      };
+
+      try {
+        const res = await ApiService.assignTask(companyId, payload);
+        alert('Task successfully assigned! ID: ' + res.task_id);
+        
+        // Auto-switch context
+        if (currentCompanyId !== companyId) {
+            currentCompanyId = companyId;
+            localStorage.setItem('company_id', currentCompanyId);
+            updateStatusBadge();
+        }
+        navigateTo('logs');
+      } catch (err: any) {
+        alert('Error assigning task: ' + err.message);
+        btn.textContent = 'Assign Task';
+        btn.disabled = false;
+      }
+    });
+
+  } catch(err: any) {
+    viewContainer.innerHTML = `<div class="empty-state error">Failed to load assignment view: ${err.message}</div>`;
+  }
+}
+
+async function renderCampaigns() {
   if (!currentCompanyId) {
     viewContainer.innerHTML = `<div class="empty-state">Please onboard a company first.</div>`;
     return;
@@ -290,26 +417,144 @@ function renderCampaigns() {
   
   viewContainer.innerHTML = `<div class="empty-state">Loading campaigns...</div>`;
 
-  ApiService.getCampaigns(currentCompanyId).then(data => {
+  try {
+    const data = await ApiService.getCampaigns(currentCompanyId);
     if (data.total === 0) {
       viewContainer.innerHTML = `<div class="empty-state">No campaigns found.</div>`;
       return;
     }
 
-    const html = data.campaigns.map((c: any) => `
-      <div class="card" style="margin-bottom: 20px;">
-        <h3>Campaign ID: ${c.campaign_id}</h3>
-        <p style="color: var(--text-muted); margin-top: 8px;">Created: ${new Date(c.created_at).toLocaleString()}</p>
-        <div style="margin-top: 16px; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px; max-height: 200px; overflow-y: auto;">
-          <pre style="margin: 0; font-size: 12px; color: var(--text-main); white-space: pre-wrap;">${JSON.stringify(c.data, null, 2)}</pre>
+    let html = '';
+    for (const c of data.campaigns) {
+      const dbData = c.data || {};
+      
+      // Fetch content for this campaign to link
+      let campaignContent: any[] = [];
+      try {
+        const cData = await ApiService.getCampaignContent(currentCompanyId, c.campaign_id);
+        campaignContent = cData.content || [];
+      } catch (e) {
+        console.warn('Could not fetch content for campaign ' + c.campaign_id);
+      }
+
+      html += `
+        <div class="card" style="margin-bottom: 24px;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div>
+              <h2 style="color: var(--primary); margin-bottom: 4px;">Campaign: ${dbData.theme ? 'Theme & Objectives' : c.campaign_id}</h2>
+              <p style="color: var(--text-muted); font-size: 14px;">Period: ${dbData.start_date || '?'} to ${dbData.end_date || '?'} | Type: ${dbData.campaign_type || 'Unknown'}</p>
+            </div>
+            <div class="status-badge active" style="font-size: 12px;">Active</div>
+          </div>
+          
+          ${dbData.theme ? `<div style="margin-top: 16px; padding: 12px; background: rgba(37,99,235,0.1); border-left: 3px solid var(--primary); border-radius: 4px;"><strong>Theme:</strong> ${dbData.theme}</div>` : ''}
+          
+          ${dbData.goals && dbData.goals.length > 0 ? `
+            <div style="margin-top: 16px;">
+              <h4 style="margin-bottom: 8px;">Goals</h4>
+              <ul style="margin: 0; padding-left: 20px; color: var(--text-muted); font-size: 14px;">
+                ${dbData.goals.map((g: string) => `<li style="margin-bottom: 4px;">${g}</li>`).join('')}
+              </ul>
+            </div>
+          ` : ''}
+
+          <div style="display: flex; gap: 24px; margin-top: 20px;">
+            ${dbData.planner_notes ? `
+              <div style="flex: 1; font-size: 13px; color: var(--text-muted); padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                <strong>Planner Notes:</strong><br/>${dbData.planner_notes}
+              </div>
+            ` : ''}
+            ${dbData.strategist_notes ? `
+              <div style="flex: 1; font-size: 13px; color: var(--text-muted); padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                <strong>Strategist Notes:</strong><br/>${dbData.strategist_notes}
+              </div>
+            ` : ''}
+          </div>
+
+          <h3 style="margin-top: 32px; margin-bottom: 16px; border-bottom: 1px solid var(--border-light); padding-bottom: 8px;">Scheduled Posts & Content</h3>
+          <div style="display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));">
+            ${(dbData.post_slots || []).map((slot: any) => {
+              // Try to find matching content
+              const matchedContent = campaignContent.find(cc => cc.data?.task_id === slot.content_task_id || cc.content_id === slot.slot_id);
+              
+              return `
+              <div style="background: var(--bg-panel); border: 1px solid var(--border-light); border-radius: 8px; padding: 16px; position: relative;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                  <span style="font-size: 11px; text-transform: uppercase; font-weight: bold; padding: 4px 8px; background: rgba(255,255,255,0.1); border-radius: 12px; color: var(--text-main);">
+                    ${slot.platform}
+                  </span>
+                  <span class="status-badge ${slot.status === 'planned' ? 'pending' : (slot.status === 'completed' ? 'active' : 'info')}" style="font-size: 10px;">
+                    ${slot.status || 'unknown'}
+                  </span>
+                </div>
+                
+                <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px; color: var(--text-main);">${slot.topic || 'No topic'}</div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+                  <strong>Type:</strong> ${slot.post_type}<br/>
+                  <strong>Date:</strong> ${slot.scheduled_datetime ? new Date(slot.scheduled_datetime).toLocaleString() : 'TBD'}<br/>
+                  ${slot.product_id ? `<strong>Product:</strong> ${slot.product_id}` : ''}
+                </div>
+                
+                <div style="font-size: 11px; color: var(--text-muted); background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; margin-bottom: 12px;">
+                  <em>"${slot.ideal_time_rationale || 'No rationale'}"</em>
+                </div>
+
+                ${slot.content_task_id ? `
+                  <div style="margin-top: 12px; border-top: 1px dashed var(--border-light); padding-top: 12px;">
+                    <button class="btn view-result-btn" data-task-id="${slot.content_task_id}" style="width: 100%; padding: 8px; font-size: 12px;">View Generation Task Result</button>
+                    <div id="result-${slot.content_task_id}" style="display: none; margin-top: 8px; font-size: 12px; background: rgba(0,0,0,0.5); padding: 8px; border-radius: 4px; overflow-x: auto;"></div>
+                  </div>
+                ` : '<div style="font-size: 12px; color: var(--warning); text-align: center; margin-top: 12px; padding: 8px; background: rgba(245, 158, 11, 0.1); border-radius: 4px;">Pending Generation</div>'}
+                
+                ${matchedContent ? `
+                  <div style="margin-top: 8px; font-size: 12px; color: var(--success); text-align: center; padding: 4px; background: rgba(16, 185, 129, 0.1); border-radius: 4px;">✓ Content Available in DB</div>
+                ` : ''}
+              </div>
+            `;
+            }).join('')}
+          </div>
         </div>
-      </div>
-    `).join('');
+      `;
+    }
 
     viewContainer.innerHTML = html;
-  }).catch(err => {
+
+    // Attach event listeners for the view result buttons
+    document.querySelectorAll('.view-result-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const target = e.target as HTMLButtonElement;
+        const taskId = target.getAttribute('data-task-id');
+        if (!taskId) return;
+        
+        const resDiv = document.getElementById(`result-${taskId}`);
+        if (!resDiv) return;
+
+        if (resDiv.style.display === 'block') {
+          resDiv.style.display = 'none';
+          target.textContent = 'View Generation Task Result';
+          return;
+        }
+
+        target.textContent = 'Loading...';
+        try {
+          const result = await ApiService.getTaskResult(taskId);
+          resDiv.style.display = 'block';
+          if (result && result.output_data) {
+             resDiv.innerHTML = `<pre style="margin:0; white-space:pre-wrap; color:var(--text-main); font-family:monospace;">${JSON.stringify(result.output_data, null, 2)}</pre>`;
+          } else {
+             resDiv.innerHTML = `<span style="color: var(--warning);">Task hasn't completed or no output found yet.</span>`;
+          }
+        } catch (err: any) {
+          resDiv.style.display = 'block';
+          resDiv.innerHTML = `<span style="color: var(--error);">Error: ${err.message}</span>`;
+        }
+        target.textContent = 'Hide Task Result';
+      });
+    });
+
+  } catch (err: any) {
     viewContainer.innerHTML = `<div class="empty-state error">Failed to load campaigns: ${err.message}</div>`;
-  });
+  }
 }
 
 let logPollInterval: any = null;

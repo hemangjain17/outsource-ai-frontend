@@ -55,8 +55,30 @@ export class ApiService {
     return res.json();
   }
 
+  static async getCampaignContent(companyId: string, campaignId: string) {
+    const res = await fetch(`${API_BASE_URL}/content/${companyId}/campaign/${campaignId}`);
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }
+
   static async getTaskLogs(companyId: string): Promise<{company_id: string, logs: TaskLog[], total: number}> {
     const res = await fetch(`${API_BASE_URL}/tasks/${companyId}/logs`);
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }
+
+  static async getTaskResult(taskId: string): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/tasks/result/${taskId}`);
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }
+
+  static async assignTask(companyId: string, payload: {title: string, description: string, assigned_to: string}): Promise<{message: string, task_id: string}> {
+    const res = await fetch(`${API_BASE_URL}/tasks/${companyId}/assign`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
   }
