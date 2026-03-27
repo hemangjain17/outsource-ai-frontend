@@ -23,7 +23,7 @@ export interface TaskLog {
 }
 
 export class ApiService {
-  static async onboardCompany(payload: OnboardRequest): Promise<{company_id: string; message: string}> {
+  static async onboardCompany(payload: OnboardRequest): Promise<{ company_id: string; message: string }> {
     const res = await fetch(`${API_BASE_URL}/onboard`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -61,7 +61,13 @@ export class ApiService {
     return res.json();
   }
 
-  static async getTaskLogs(companyId: string): Promise<{company_id: string, logs: TaskLog[], total: number}> {
+  static async getSingleContent(companyId: string, contentId: string): Promise<any> {
+    const res = await fetch(`${API_BASE_URL}/content/${companyId}/${contentId}`);
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }
+
+  static async getTaskLogs(companyId: string): Promise<{ company_id: string, logs: TaskLog[], total: number }> {
     const res = await fetch(`${API_BASE_URL}/tasks/${companyId}/logs`);
     if (!res.ok) throw new Error(await res.text());
     return res.json();
@@ -73,7 +79,7 @@ export class ApiService {
     return res.json();
   }
 
-  static async assignTask(companyId: string, payload: {title: string, description: string, assigned_to: string}): Promise<{message: string, task_id: string}> {
+  static async assignTask(companyId: string, payload: { title: string, description: string, assigned_to: string }): Promise<{ message: string, task_id: string }> {
     const res = await fetch(`${API_BASE_URL}/tasks/${companyId}/assign`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

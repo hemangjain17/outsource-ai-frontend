@@ -1,6 +1,52 @@
 import './style.css';
 import { ApiService, type TaskLog } from './api';
 
+function formatContentData(data: any): string {
+  if (!data || Object.keys(data).length === 0) return '<div class="text-muted">No details available</div>';
+
+  // Standard fields for Content Generator
+  const hasContentFields = data.title || data.body || data.cta;
+  // Standard fields for Designer
+  const hasDesignFields = data.design_url || data.design_brief;
+
+  if (hasContentFields) {
+    return `
+      <div style="display: flex; flex-direction: column; gap: 8px; text-align: left; font-family: var(--font-body, Inter, sans-serif);">
+        ${data.title ? `<div><strong style="color: var(--primary);">Title:</strong> <span style="color: var(--text-main); font-weight: 500;">${data.title}</span></div>` : ''}
+        ${data.status ? `<div><strong>Status:</strong> <span class="status-badge ${data.status === 'completed' || data.status === 'approved' ? 'active' : 'pending'}" style="font-size: 11px;">${data.status.replace('_', ' ')}</span></div>` : ''}
+        ${data.content_type ? `<div><strong>Content Type:</strong> <span style="text-transform: capitalize;">${data.content_type.replace('_', ' ')}</span></div>` : ''}
+        ${data.body ? `<div><strong style="display: block; margin-bottom: 4px;">Body:</strong>
+          <div style="white-space: pre-wrap; font-family: inherit; padding: 12px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; color: var(--text-main); font-size: 14px; line-height: 1.5;">${data.body}</div>
+        </div>` : ''}
+        ${data.cta ? `<div><strong>CTA:</strong> <em style="color: var(--text-main);">${data.cta}</em></div>` : ''}
+        ${data.hashtags && data.hashtags.length > 0 ? `<div><strong>Hashtags:</strong> <span style="color: var(--primary);">${data.hashtags.map((h: string) => '#' + h.replace('#', '')).join(' ')}</span></div>` : ''}
+        
+        <div style="font-size: 11px; color: var(--text-muted); margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-light); display: flex; flex-direction: column; gap: 4px;">
+          ${data.content_id ? `<span><strong>Content ID:</strong> <code>${data.content_id}</code></span>` : ''}
+          ${data.slot_id ? `<span><strong>Slot ID:</strong> <code>${data.slot_id}</code></span>` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  if (hasDesignFields) {
+    return `
+      <div style="display: flex; flex-direction: column; gap: 8px; text-align: left; font-family: var(--font-body, Inter, sans-serif);">
+        ${data.design_url ? `<div><strong style="color: var(--primary);">Design Asset:</strong> <a href="${data.design_url}" target="_blank" style="color: var(--primary); font-size: 13px; text-decoration: underline;">Open Figma Design</a></div>` : ''}
+        ${data.design_brief ? `<div><strong style="display: block; margin-bottom: 4px;">Visual Brief:</strong>
+          <div style="padding: 12px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05); border-radius: 6px; font-size: 13px; color: var(--text-muted); line-height: 1.4;">
+            ${data.design_brief.mood ? `<strong>Mood:</strong> ${data.design_brief.mood}<br/>` : ''}
+            ${data.design_brief.description ? `<span>${data.design_brief.description}</span>` : ''}
+          </div>
+        </div>` : ''}
+      </div>
+    `;
+  }
+
+  // Fallback to raw JSON dump formatted nicely
+  return `<pre style="margin:0; font-size: 11px; white-space: pre-wrap; color: var(--text-muted); padding: 8px; background: rgba(0,0,0,0.2); border-radius: 4px;">${JSON.stringify(data, null, 2)}</pre>`;
+}
+
 // State
 let currentCompanyId: string | null = localStorage.getItem('company_id');
 let currentRoute = 'dashboard';
@@ -14,7 +60,23 @@ const statusBadge = document.getElementById('company-status')!;
 // Init
 function init() {
   updateStatusBadge();
-  
+
+  // ── Theme Toggle ──────────────────────────────────────────
+  const themeBtn = document.getElementById('theme-toggle-btn') as HTMLButtonElement;
+  const savedTheme = localStorage.getItem('theme') || 'dark';
+  if (savedTheme === 'light') {
+    document.body.classList.add('light');
+    themeBtn.textContent = '☀️';
+  } else {
+    themeBtn.textContent = '🌙';
+  }
+  themeBtn.addEventListener('click', () => {
+    const isLight = document.body.classList.toggle('light');
+    themeBtn.textContent = isLight ? '☀️' : '🌙';
+    localStorage.setItem('theme', isLight ? 'light' : 'dark');
+  });
+  // ─────────────────────────────────────────────────────────
+
   navLinks.forEach(link => {
     link.addEventListener('click', (e) => {
       e.preventDefault();
@@ -39,7 +101,7 @@ function updateStatusBadge() {
 
 function navigateTo(route: string) {
   currentRoute = route;
-  
+
   // Update Nav
   navLinks.forEach(link => {
     if (link.getAttribute('data-route') === route) {
@@ -50,7 +112,7 @@ function navigateTo(route: string) {
   });
 
   // Render View
-  switch(route) {
+  switch (route) {
     case 'dashboard':
       pageTitle.textContent = 'Overview';
       renderDashboard();
@@ -89,7 +151,7 @@ async function renderDashboard() {
   }
 
   viewContainer.innerHTML = `<div class="empty-state">Loading dashboard data...</div>`;
-  
+
   try {
     const campaignsData = await ApiService.getCampaigns(currentCompanyId);
     const contentData = await ApiService.getContent(currentCompanyId);
@@ -119,8 +181,8 @@ async function renderDashboard() {
       <div class="card">
         <h2>Latest Content</h2>
         <div class="log-stream" style="margin-top:16px;">
-          ${contentData.content && contentData.content.length > 0 ? 
-            contentData.content.slice(0,5).map((c: any) => `
+          ${contentData.content && contentData.content.length > 0 ?
+        contentData.content.slice(0, 5).map((c: any) => `
               <div class="log-entry state_change">
                 <div class="log-content">
                   <div class="log-agent">Content</div>
@@ -128,7 +190,7 @@ async function renderDashboard() {
                 </div>
               </div>
             `).join('') : '<p class="text-muted">No content generated yet.</p>'
-          }
+      }
         </div>
       </div>
     `;
@@ -215,7 +277,7 @@ function renderOnboarding() {
     btnList.style.color = 'white';
     btnNew.style.background = 'var(--bg-card)';
     btnNew.style.color = 'var(--text-muted)';
-    
+
     // Fetch and render list
     const listContainer = document.getElementById('companies-list')!;
     listContainer.innerHTML = '<div class="empty-state">Loading companies...</div>';
@@ -225,7 +287,7 @@ function renderOnboarding() {
         listContainer.innerHTML = '<div class="empty-state">No companies onboarded yet.</div>';
         return;
       }
-      
+
       listContainer.innerHTML = dbData.companies.map((c: any) => `
         <div style="padding: 16px; border-bottom: 1px solid var(--border-light); display: flex; flex-direction: column; gap: 8px;">
           <div style="display: flex; justify-content: space-between;">
@@ -245,7 +307,7 @@ function renderOnboarding() {
           </div>
         </div>
       `).join('');
-      
+
       document.querySelectorAll('.switch-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
           const targetId = (e.target as HTMLButtonElement).getAttribute('data-id');
@@ -263,19 +325,19 @@ function renderOnboarding() {
           const target = e.target as HTMLButtonElement;
           const companyId = target.getAttribute('data-id');
           if (!companyId) return;
-          
+
           const textSpan = document.getElementById('stats-text-' + companyId);
           if (!textSpan) return;
 
           target.textContent = 'Loading...';
           target.disabled = true;
-          
+
           try {
             const [campData, contData] = await Promise.all([
               ApiService.getCampaigns(companyId),
               ApiService.getContent(companyId)
             ]);
-            
+
             target.style.display = 'none';
             textSpan.style.display = 'inline-block';
             textSpan.innerHTML = `<strong>Campaigns:</strong> ${campData.total || 0} &nbsp;|&nbsp; <strong>Content Items:</strong> ${contData.total || 0}`;
@@ -284,7 +346,7 @@ function renderOnboarding() {
           }
         });
       });
-      
+
     } catch (err: any) {
       listContainer.innerHTML = `<div class="empty-state error">Failed to load companies: ${err.message}</div>`;
     }
@@ -327,7 +389,7 @@ async function renderTasksAssign() {
       viewContainer.innerHTML = `<div class="empty-state">No companies onboarded. Please onboard a company first to assign tasks.</div>`;
       return;
     }
-    
+
     const optionsHtml = dbData.companies.map((c: any) => {
       const name = c.data.onboarding?.company_name || c.company_id;
       const desc = c.data.onboarding?.description || 'No description';
@@ -378,7 +440,7 @@ async function renderTasksAssign() {
       const btn = document.getElementById('submit-task-btn') as HTMLButtonElement;
       btn.textContent = 'Assigning...';
       btn.disabled = true;
-      
+
       const companyId = (document.getElementById('task_company_id') as HTMLSelectElement).value;
       const payload = {
         title: (document.getElementById('task_title') as HTMLInputElement).value,
@@ -389,12 +451,12 @@ async function renderTasksAssign() {
       try {
         const res = await ApiService.assignTask(companyId, payload);
         alert('Task successfully assigned! ID: ' + res.task_id);
-        
+
         // Auto-switch context
         if (currentCompanyId !== companyId) {
-            currentCompanyId = companyId;
-            localStorage.setItem('company_id', currentCompanyId);
-            updateStatusBadge();
+          currentCompanyId = companyId;
+          localStorage.setItem('company_id', currentCompanyId);
+          updateStatusBadge();
         }
         navigateTo('logs');
       } catch (err: any) {
@@ -404,172 +466,405 @@ async function renderTasksAssign() {
       }
     });
 
-  } catch(err: any) {
+  } catch (err: any) {
     viewContainer.innerHTML = `<div class="empty-state error">Failed to load assignment view: ${err.message}</div>`;
   }
 }
 
 async function renderCampaigns() {
-  if (!currentCompanyId) {
-    viewContainer.innerHTML = `<div class="empty-state">Please onboard a company first.</div>`;
-    return;
-  }
-  
-  viewContainer.innerHTML = `<div class="empty-state">Loading campaigns...</div>`;
+  // ── Dummy Campaign Data ────────────────────────────────────────────────────
+  const DUMMY_CAMPAIGNS = [
+    {
+      id: '9d59b843-f6df-468e',
+      theme: 'Developer Empowerment & AI-First Products',
+      status: 'active',
+      start_date: '2026-04-01',
+      end_date: '2026-04-30',
+      campaign_type: 'Brand Awareness',
+      goals: [
+        'Increase developer sign-ups by 30% via organic LinkedIn reach',
+        'Establish thought leadership in the AI API space',
+        'Drive 500+ unique visitors to the API documentation',
+      ],
+      planner_notes: 'Focus on developer success stories and practical tutorials. Schedule posts during peak dev hours (9–11am, 5–7pm). Avoid product-heavy CTA on the first touchpoint.',
+      strategist_notes: 'Competitor analysis shows a gap in authentic storytelling. Position OpenAI as the partner of individual developers, not just enterprises. Hashtag strategy: blend trending AI tags with niche developer community tags.',
+      posts: [
+        {
+          id: 'li-001',
+          platform: 'LinkedIn',
+          platform_icon: '💼',
+          topic: 'Developer Spotlight: AI-Powered Legal Document Analyser',
+          post_type: 'Storytelling',
+          scheduled: 'Apr 3, 2026 · 10:00 AM',
+          status: 'approved',
+          title: 'How One Developer Built an AI-Powered Legal Document Analyzer in 6 Weeks',
+          body: `When we talk about what's possible with the OpenAI API, stories like Sarah's really bring it to life.\n\nSarah Chen, a solo developer and former paralegal, wanted to help her old law firm manage thousands of contracts more efficiently. With no ML team and a tight timeline, she turned to the OpenAI API.\n\nUsing GPT-4 via the API, she built ContractIQ — a tool that extracts key clauses, flags risky language, and summarizes dense legal documents in seconds.\n\n"The integration was surprisingly straightforward," Sarah shared. "Within a week, I had a working prototype."\n\nThe result: 80% reduction in manual document review time for the firm, and Sarah now serves 12 more firms as a paying customer.\n\n#OpenAI #DeveloperSpotlight #AIApps #GPT4 #Startup`,
+          cta: 'What would you build if you had access to state-of-the-art language AI?',
+          hashtags: ['OpenAI', 'DeveloperSpotlight', 'AIApps', 'GPT4', 'Startup'],
+          media: '/ai_developer_sleek.png',
+        },
+        {
+          id: 'tw-001',
+          platform: 'Twitter/X',
+          platform_icon: '🐦',
+          topic: 'API Tip: Function Calling for Structured Outputs',
+          post_type: 'Educational Thread',
+          scheduled: 'Apr 5, 2026 · 9:30 AM',
+          status: 'scheduled',
+          title: '🧵 Thread: The one GPT-4 feature that changed how I build apps',
+          body: `1/ The one GPT-4 feature that changed how I build apps? Function calling.\n\nHere's a quick breakdown 👇\n\n2/ Instead of parsing messy text output, you define structured functions. The model returns clean JSON every time.\n\n3/ Example: Ask the model to extract invoice data → get back {vendor, amount, date} — no regex needed.\n\n4/ This powers everything from booking bots to medical intake forms. The model does the heavy lifting.\n\n5/ If you haven't tried function calling yet, the OpenAI docs have a great quickstart. Link in bio. 🚀\n\n#OpenAI #LLM #DeveloperTips #AI #GPT4`,
+          cta: 'Have you tried function calling in your projects? Drop your use case below 👇',
+          hashtags: ['OpenAI', 'LLM', 'DeveloperTips', 'AI', 'GPT4'],
+          media: '/ai_nodes_abstract.png',
+        },
+        {
+          id: 'bl-001',
+          platform: 'Blog / Medium',
+          platform_icon: '✍️',
+          topic: 'Building a Production-Ready RAG System in 2026',
+          post_type: 'Technical Deep-Dive',
+          scheduled: 'Apr 10, 2026 · 8:00 AM',
+          status: 'draft',
+          title: 'Building a Production-Ready RAG Pipeline with the OpenAI API: A Complete Guide',
+          body: `Retrieval-Augmented Generation (RAG) has moved from research prototype to production standard in under two years. In this guide, we'll walk through the architecture decisions, chunking strategies, and API patterns that separate demo-quality RAG from production-grade systems.\n\n## What We're Building\nA document Q&A system that can accurately answer questions over a 10,000-page internal knowledge base in under 2 seconds.\n\n## Architecture Overview\n- Ingestion layer: PDF → text → semantic chunks\n- Embedding store: OpenAI text-embedding-3-small + pgvector\n- Retrieval: hybrid BM25 + cosine similarity re-ranking\n- Generation: GPT-4o with system-injected context and citations\n\n## Key Learnings\n1. Chunk size matters more than embedding model choice\n2. Re-ranking dramatically improves answer quality\n3. System prompt engineering accounts for 40% of perceived quality\n\nRead the full guide on our blog for code snippets and benchmarks.`,
+          cta: 'Read the full guide →',
+          hashtags: ['RAG', 'OpenAI', 'LLM', 'MachineLearning', 'AIEngineering'],
+          media: '/data_flows_rag.png',
+        },
+      ],
+    },
+    {
+      id: 'a1b2c3d4-e5f6-7890',
+      theme: 'Enterprise AI Adoption & Safety',
+      status: 'planning',
+      start_date: '2026-05-01',
+      end_date: '2026-05-31',
+      campaign_type: 'Thought Leadership',
+      goals: [
+        'Target CTOs and VPs of Engineering at Series B+ companies',
+        'Publish three authoritative pieces on responsible AI deployment',
+        'Generate 20+ qualified enterprise leads from LinkedIn',
+      ],
+      planner_notes: 'Content should feel authoritative and data-backed. White-paper style posts perform best with this audience. Pair with a webinar invite in the second week.',
+      strategist_notes: 'Enterprise buyers care deeply about compliance, security, and ROI. Lead with those angles. Avoid hype language — this audience is skeptical. Use case studies with named clients where possible.',
+      posts: [
+        {
+          id: 'li-ent-001',
+          platform: 'LinkedIn',
+          platform_icon: '💼',
+          topic: 'The Hidden Costs of DIY LLM Infrastructure',
+          post_type: 'Insight / Data Post',
+          scheduled: 'May 2, 2026 · 8:30 AM',
+          status: 'planned',
+          title: 'The Hidden Costs of Building Your Own LLM Infrastructure',
+          body: `CFOs are starting to ask the right questions about AI infrastructure.\n\nOur analysis of 47 mid-to-large engineering teams shows that self-hosting LLMs costs 3.2× more than using a managed API — once you factor in:\n\n• Model maintenance & version management: ~$180K/year\n• GPU infra & cooling: ~$240K/year  \n• Internal ML Ops headcount: ~$320K/year\n• Compliance & audit overhead: ~$60K/year\n\nTotal: ~$800K/year vs. ~$250K for comparable API usage at scale.\n\nThe math changes when you cross 10M+ requests/day. Until then, the API is almost always the right call.\n\n#EnterpriseAI #LLM #CloudComputing #CTO #AIStrategy`,
+          cta: 'Is your team doing this calculation? We\'d love to hear the numbers you\'re seeing.',
+          hashtags: ['EnterpriseAI', 'LLM', 'CloudComputing', 'CTO', 'AIStrategy'],
+          media: '/ai_nodes_abstract.png',
+        },
+        {
+          id: 'li-ent-002',
+          platform: 'LinkedIn',
+          platform_icon: '💼',
+          topic: 'AI Safety is a Business Requirement, Not a PR Exercise',
+          post_type: 'Opinion / Perspective',
+          scheduled: 'May 8, 2026 · 10:00 AM',
+          status: 'planned',
+          title: 'AI Safety Is a Business Requirement, Not a PR Exercise',
+          body: `A hard truth for 2026: companies that treat AI safety as a PR checkbox will face regulatory and reputational risk within 18 months.\n\nHere's what responsible AI deployment actually looks like at the infrastructure level:\n\n✅ Output filtering and content policies tied to use-case context\n✅ Prompt injection audit trails\n✅ Human-in-the-loop escalation for high-stakes decisions\n✅ Quarterly red-team exercises on your AI products\n✅ Model versioning with rollback capability\n\nThe companies doing this now are building durable competitive advantages. The companies skipping it are accumulating technical and legal debt.\n\nAt OpenAI, safety is baked into every layer of the API — not bolted on after the fact.\n\n#AIResponsibility #AIGovernance #EnterpriseAI #CTO #SafeAI`,
+          cta: 'What\'s one AI safety practice your team has implemented that you\'d recommend to others?',
+          hashtags: ['AIResponsibility', 'AIGovernance', 'EnterpriseAI', 'CTO', 'SafeAI'],
+          media: '/ai_safety_nodes.png',
+        },
+        {
+          id: 'bl-ent-001',
+          platform: 'Blog / Medium',
+          platform_icon: '✍️',
+          topic: 'Case Study: FinanceOS Reduced Analyst Time by 60%',
+          post_type: 'Customer Case Study',
+          scheduled: 'May 14, 2026 · 8:00 AM',
+          status: 'planned',
+          title: 'Case Study: How FinanceOS Cut FP&A Report Generation Time by 60% with GPT-4o',
+          body: `FinanceOS, a B2B SaaS platform serving 200+ enterprise finance teams, had a problem: their analysts were spending 12+ hours a week on routine variance commentary for board reports.\n\nThe solution was straightforward in concept — an AI co-pilot that drafts the first version of each variance explanation, pulling context from the financial data and prior commentary.\n\nBut making it accurate enough for a CFO audience was the hard part.\n\nOver 8 weeks, FinanceOS's team used the OpenAI API to build and iterate on a GPT-4o-powered writing assistant embedded directly in their reporting workflow.\n\nThe results:\n• 60% reduction in time-to-draft for variance commentary\n• 94% analyst satisfaction rate (up from 67% for previous tool)\n• Zero hallucinated numbers — achieved via structured data injection and output validation\n\n"Our analysts still own every word," said FinanceOS CTO Maria Valdez. "The AI just removes the blank page problem."\n\nRead the full case study for the architecture breakdown and prompt engineering details.`,
+          cta: 'Read the full case study →',
+          hashtags: ['FinTech', 'EnterpriseAI', 'FP&A', 'GPT4', 'ProductivityAI'],
+          media: '/ai_developer_sleek.png',
+        },
+      ],
+    },
+  ];
 
-  try {
-    const data = await ApiService.getCampaigns(currentCompanyId);
-    if (data.total === 0) {
-      viewContainer.innerHTML = `<div class="empty-state">No campaigns found.</div>`;
-      return;
-    }
+  // ── Modal helper ────────────────────────────────────────────────────────────
+  function openPostModal(post: any) {
+    const statusColor = post.status === 'approved' ? 'var(--success)' :
+      post.status === 'scheduled' ? 'var(--primary)' :
+        post.status === 'draft' ? 'var(--warning)' : 'var(--text-muted)';
 
-    let html = '';
-    for (const c of data.campaigns) {
-      const dbData = c.data || {};
-      
-      // Fetch content for this campaign to link
-      let campaignContent: any[] = [];
-      try {
-        const cData = await ApiService.getCampaignContent(currentCompanyId, c.campaign_id);
-        campaignContent = cData.content || [];
-      } catch (e) {
-        console.warn('Could not fetch content for campaign ' + c.campaign_id);
-      }
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.id = 'post-modal';
+    modal.innerHTML = `
+      <div class="modal-box">
+        <button class="modal-close" id="modal-close-btn">✕</button>
 
-      html += `
-        <div class="card" style="margin-bottom: 24px;">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-            <div>
-              <h2 style="color: var(--primary); margin-bottom: 4px;">Campaign: ${dbData.theme ? 'Theme & Objectives' : c.campaign_id}</h2>
-              <p style="color: var(--text-muted); font-size: 14px;">Period: ${dbData.start_date || '?'} to ${dbData.end_date || '?'} | Type: ${dbData.campaign_type || 'Unknown'}</p>
-            </div>
-            <div class="status-badge active" style="font-size: 12px;">Active</div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+          <span style="font-size: 24px;">${post.platform_icon}</span>
+          <div>
+            <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); font-weight: 600;">${post.platform}</div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">📅 ${post.scheduled}</div>
           </div>
-          
-          ${dbData.theme ? `<div style="margin-top: 16px; padding: 12px; background: rgba(37,99,235,0.1); border-left: 3px solid var(--primary); border-radius: 4px;"><strong>Theme:</strong> ${dbData.theme}</div>` : ''}
-          
-          ${dbData.goals && dbData.goals.length > 0 ? `
-            <div style="margin-top: 16px;">
-              <h4 style="margin-bottom: 8px;">Goals</h4>
-              <ul style="margin: 0; padding-left: 20px; color: var(--text-muted); font-size: 14px;">
-                ${dbData.goals.map((g: string) => `<li style="margin-bottom: 4px;">${g}</li>`).join('')}
-              </ul>
-            </div>
-          ` : ''}
-
-          <div style="display: flex; gap: 24px; margin-top: 20px;">
-            ${dbData.planner_notes ? `
-              <div style="flex: 1; font-size: 13px; color: var(--text-muted); padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px;">
-                <strong>Planner Notes:</strong><br/>${dbData.planner_notes}
-              </div>
-            ` : ''}
-            ${dbData.strategist_notes ? `
-              <div style="flex: 1; font-size: 13px; color: var(--text-muted); padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px;">
-                <strong>Strategist Notes:</strong><br/>${dbData.strategist_notes}
-              </div>
-            ` : ''}
-          </div>
-
-          <h3 style="margin-top: 32px; margin-bottom: 16px; border-bottom: 1px solid var(--border-light); padding-bottom: 8px;">Scheduled Posts & Content</h3>
-          <div style="display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));">
-            ${(dbData.post_slots || []).map((slot: any) => {
-              // Try to find matching content
-              const matchedContent = campaignContent.find(cc => cc.data?.task_id === slot.content_task_id || cc.content_id === slot.slot_id);
-              
-              return `
-              <div style="background: var(--bg-panel); border: 1px solid var(--border-light); border-radius: 8px; padding: 16px; position: relative;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                  <span style="font-size: 11px; text-transform: uppercase; font-weight: bold; padding: 4px 8px; background: rgba(255,255,255,0.1); border-radius: 12px; color: var(--text-main);">
-                    ${slot.platform}
-                  </span>
-                  <span class="status-badge ${slot.status === 'planned' ? 'pending' : (slot.status === 'completed' ? 'active' : 'info')}" style="font-size: 10px;">
-                    ${slot.status || 'unknown'}
-                  </span>
-                </div>
-                
-                <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px; color: var(--text-main);">${slot.topic || 'No topic'}</div>
-                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
-                  <strong>Type:</strong> ${slot.post_type}<br/>
-                  <strong>Date:</strong> ${slot.scheduled_datetime ? new Date(slot.scheduled_datetime).toLocaleString() : 'TBD'}<br/>
-                  ${slot.product_id ? `<strong>Product:</strong> ${slot.product_id}` : ''}
-                </div>
-                
-                <div style="font-size: 11px; color: var(--text-muted); background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; margin-bottom: 12px;">
-                  <em>"${slot.ideal_time_rationale || 'No rationale'}"</em>
-                </div>
-
-                ${slot.content_task_id ? `
-                  <div style="margin-top: 12px; border-top: 1px dashed var(--border-light); padding-top: 12px;">
-                    <button class="btn view-result-btn" data-task-id="${slot.content_task_id}" style="width: 100%; padding: 8px; font-size: 12px;">View Generation Task Result</button>
-                    <div id="result-${slot.content_task_id}" style="display: none; margin-top: 8px; font-size: 12px; background: rgba(0,0,0,0.5); padding: 8px; border-radius: 4px; overflow-x: auto;"></div>
-                  </div>
-                ` : matchedContent ? `
-                  <div style="margin-top: 12px; border-top: 1px dashed var(--border-light); padding-top: 12px;">
-                    <details>
-                      <summary style="cursor: pointer; font-size: 12px; padding: 8px; background: rgba(16, 185, 129, 0.1); color: var(--success); border-radius: 4px; text-align: center; list-style: none;">✓ View Generated Content</summary>
-                      <pre style="margin-top: 8px; font-size: 11px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px; overflow-x: auto; color: var(--text-main); white-space: pre-wrap;">${JSON.stringify(matchedContent.data, null, 2).replace(/</g, '\\u003c')}</pre>
-                    </details>
-                  </div>
-                ` : '<div style="font-size: 12px; color: var(--warning); text-align: center; margin-top: 12px; padding: 8px; background: rgba(245, 158, 11, 0.1); border-radius: 4px;">Pending Generation</div>'}
-                
-                ${matchedContent && slot.content_task_id ? `
-                  <div style="margin-top: 8px; font-size: 12px; color: var(--success); text-align: center; padding: 4px; background: rgba(16, 185, 129, 0.1); border-radius: 4px;">✓ Content Available in DB</div>
-                ` : ''}
-              </div>
-            `;
-            }).join('')}
-          </div>
+          <span style="margin-left: auto; color: ${statusColor}; font-size: 12px; font-weight: 700; text-transform: uppercase; background: ${statusColor}22; padding: 4px 10px; border-radius: 20px;">${post.status}</span>
         </div>
-      `;
-    }
 
-    viewContainer.innerHTML = html;
+        ${post.media ? `
+          <div class="modal-media-preview">
+            <img src="${post.media}" alt="Post Media">
+          </div>
+        ` : ''}
 
-    // Attach event listeners for the view result buttons
-    document.querySelectorAll('.view-result-btn').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        const target = e.target as HTMLButtonElement;
-        const taskId = target.getAttribute('data-task-id');
-        if (!taskId) return;
-        
-        const resDiv = document.getElementById(`result-${taskId}`);
-        if (!resDiv) return;
+        <h2 style="font-size: 18px; line-height: 1.4; margin-bottom: 16px; color: var(--text-main);">${post.title}</h2>
 
-        if (resDiv.style.display === 'block') {
-          resDiv.style.display = 'none';
-          target.textContent = 'View Generation Task Result';
-          return;
-        }
+        <div style="white-space: pre-wrap; font-size: 14px; line-height: 1.7; color: var(--text-muted); background: rgba(37,99,235,0.04); border: 1px solid var(--border-light); border-radius: 10px; padding: 16px; margin-bottom: 16px;">${post.body}</div>
 
-        target.textContent = 'Loading...';
-        try {
-          const result = await ApiService.getTaskResult(taskId);
-          resDiv.style.display = 'block';
-          if (result && result.output_data) {
-             resDiv.innerHTML = `<pre style="margin:0; white-space:pre-wrap; color:var(--text-main); font-family:monospace;">${JSON.stringify(result.output_data, null, 2)}</pre>`;
-          } else {
-             resDiv.innerHTML = `<span style="color: var(--warning);">Task hasn't completed or no output found yet.</span>`;
-          }
-        } catch (err: any) {
-          resDiv.style.display = 'block';
-          resDiv.innerHTML = `<span style="color: var(--error);">Error: ${err.message}</span>`;
-        }
-        target.textContent = 'Hide Task Result';
-      });
+        ${post.cta ? `<div style="padding: 12px 16px; border-left: 3px solid var(--primary); background: rgba(37,99,235,0.08); border-radius: 6px; font-size: 14px; color: var(--text-main); font-style: italic; margin-bottom: 12px;">"${post.cta}"</div>` : ''}
+
+        ${post.hashtags && post.hashtags.length > 0 ? `<div style="font-size: 13px; color: var(--primary); margin-bottom: 20px;">${post.hashtags.map((h: string) => '#' + h).join(' ')}</div>` : ''}
+
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+          <button class="btn" id="approve-btn" style="flex:2; background: var(--success); font-size: 13px;">✓ Approve & Schedule</button>
+          <button class="btn" id="revision-btn" style="flex:1; background: rgba(239,68,68,0.1); color: var(--error); border: 1px solid var(--error); font-size: 13px; box-shadow: none;">✗ Revision</button>
+        </div>
+        <div id="action-status" style="margin-top: 12px; font-size: 12px; text-align: center; color: var(--text-muted); display: none;"></div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const approveBtn = document.getElementById('approve-btn');
+    const revisionBtn = document.getElementById('revision-btn');
+    const statusDiv = document.getElementById('action-status');
+
+    approveBtn?.addEventListener('click', () => {
+      if (!approveBtn || !revisionBtn || !statusDiv) return;
+      approveBtn.innerHTML = `Scheduling <div class="loader-dots"><span></span><span></span><span></span></div>`;
+      approveBtn.style.opacity = '0.7';
+      approveBtn.style.pointerEvents = 'none';
+      revisionBtn.style.display = 'none';
+      
+      setTimeout(() => {
+        statusDiv.style.display = 'block';
+        statusDiv.style.color = 'var(--success)';
+        statusDiv.innerHTML = '✨ Post successfully scheduled to ' + post.platform + '!';
+        approveBtn.innerHTML = '🎉 Scheduled';
+        setTimeout(() => modal.remove(), 1500);
+      }, 2000);
     });
 
-  } catch (err: any) {
-    viewContainer.innerHTML = `<div class="empty-state error">Failed to load campaigns: ${err.message}</div>`;
+    revisionBtn?.addEventListener('click', () => {
+      if (!approveBtn || !revisionBtn || !statusDiv) return;
+      revisionBtn.innerHTML = `Requesting <div class="loader-dots"><span></span><span></span><span></span></div>`;
+      revisionBtn.style.opacity = '0.7';
+      revisionBtn.style.pointerEvents = 'none';
+      approveBtn.style.display = 'none';
+      
+      setTimeout(() => {
+        statusDiv.style.display = 'block';
+        statusDiv.innerHTML = '🤖 Agent is working on your revision... (ETA 2 min)';
+        setTimeout(() => modal.remove(), 2500);
+      }, 2000);
+    });
+
+    document.getElementById('modal-close-btn')?.addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
   }
+
+  // ── Render HTML ─────────────────────────────────────────────────────────────
+  let html = '';
+
+  for (const camp of DUMMY_CAMPAIGNS) {
+    const statusColor = camp.status === 'active' ? 'var(--success)' : 'var(--warning)';
+    const statusBg = camp.status === 'active' ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)';
+
+    html += `
+      <div class="card" style="margin-bottom: 32px;">
+        <!-- Campaign Header -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <h2 style="color: var(--primary); margin-bottom: 6px; font-size: 22px;">${camp.theme}</h2>
+            <p style="color: var(--text-muted); font-size: 13px; margin: 0;">
+              📅 ${camp.start_date} – ${camp.end_date} &nbsp;·&nbsp; 📌 ${camp.campaign_type}
+            </p>
+          </div>
+          <span style="color: ${statusColor}; background: ${statusBg}; padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; text-transform: uppercase;">${camp.status}</span>
+        </div>
+
+        <!-- Goals -->
+        <div style="margin-top: 20px; padding: 16px; background: rgba(37,99,235,0.05); border: 1px solid rgba(37,99,235,0.15); border-radius: 10px;">
+          <h4 style="color: var(--primary); margin-bottom: 10px; font-size: 13px; letter-spacing: 0.5px; text-transform: uppercase;">Campaign Goals</h4>
+          <ul style="margin: 0; padding-left: 18px; color: var(--text-muted); font-size: 14px; line-height: 1.8;">
+            ${camp.goals.map(g => `<li>${g}</li>`).join('')}
+          </ul>
+        </div>
+
+        <!-- Notes -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px;">
+          <div style="font-size: 13px; color: var(--text-muted); padding: 14px; background: rgba(0,0,0,0.15); border-radius: 8px; border: 1px solid var(--border-light);">
+            <strong style="color: var(--text-main); display: block; margin-bottom: 6px;">📋 Planner Notes</strong>
+            ${camp.planner_notes}
+          </div>
+          <div style="font-size: 13px; color: var(--text-muted); padding: 14px; background: rgba(0,0,0,0.15); border-radius: 8px; border: 1px solid var(--border-light);">
+            <strong style="color: var(--text-main); display: block; margin-bottom: 6px;">🎯 Strategist Notes</strong>
+            ${camp.strategist_notes}
+          </div>
+        </div>
+
+        <!-- Posts grid -->
+        <h3 style="margin-top: 28px; margin-bottom: 16px; border-bottom: 1px solid var(--border-light); padding-bottom: 10px; font-size: 16px;">
+          📝 Scheduled Content — ${camp.posts.length} Posts
+        </h3>
+        <div style="display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));">
+          ${camp.posts.map(post => {
+      const pStatusColor = post.status === 'approved' ? 'var(--success)' :
+        post.status === 'scheduled' ? 'var(--primary)' :
+          post.status === 'draft' ? 'var(--warning)' : 'var(--text-muted)';
+      const pStatusBg = post.status === 'approved' ? 'rgba(16,185,129,0.12)' :
+        post.status === 'scheduled' ? 'rgba(37,99,235,0.12)' :
+          post.status === 'draft' ? 'rgba(245,158,11,0.12)' : 'rgba(0,0,0,0.1)';
+      return `
+              <div class="post-card" data-post-id="${post.id}">
+                ${post.media ? `
+                  <div class="post-thumbnail-container">
+                    <img src="${post.media}" alt="Thumbnail">
+                  </div>
+                ` : ''}
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                  <span style="font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px;">
+                    ${post.platform_icon} ${post.platform}
+                  </span>
+                  <span style="color: ${pStatusColor}; background: ${pStatusBg}; font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 3px 9px; border-radius: 20px;">${post.status}</span>
+                </div>
+                <div style="font-size: 11px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 4px;">${post.post_type}</div>
+                <div style="font-weight: 600; font-size: 14px; color: var(--text-main); margin-bottom: 8px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${post.topic}</div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">📅 ${post.scheduled}</div>
+                
+                <button class="btn view-post-btn" data-post-id="${post.id}" style="width: 100%; padding: 10px; font-size: 13px; border-radius: 8px;">
+                  View Post ↗
+                </button>
+              </div>
+            `;
+    }).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  viewContainer.innerHTML = html;
+
+  // Build a flat lookup of posts for the click handlers
+  const allPosts: Record<string, any> = {};
+  for (const camp of DUMMY_CAMPAIGNS) {
+    for (const p of camp.posts) allPosts[p.id] = p;
+  }
+
+  document.querySelectorAll('.view-post-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = (btn as HTMLElement).getAttribute('data-post-id');
+      if (id && allPosts[id]) openPostModal(allPosts[id]);
+    });
+  });
 }
 
-let logPollInterval: any = null;
+import { supabase } from './supabase';
+
+let logRealtimeChannel: ReturnType<typeof supabase.channel> | null = null;
 let expandedOutputs: Record<string, string> = {};
 
+// ── helper: render a single TaskLog row into HTML ────────────────────────────
+function renderLogEntry(log: TaskLog): string {
+  const time = new Date(log.timestamp).toLocaleTimeString();
+  const isContentGenCompleted = log.agent === 'content_generator' && log.new_status === 'completed';
+  const isExpanded = expandedOutputs[log.log_id] !== undefined;
+
+  return `
+    <div class="log-entry ${log.event}" data-log-id="${log.log_id}">
+      <div class="log-time">${time}</div>
+      <div class="log-content">
+        ${log.agent ? `<div class="log-agent">${log.agent}</div>` : ''}
+        <div class="log-message">
+          <strong>[${log.event.toUpperCase()}]</strong> ${log.message}
+          ${log.new_status ? `<span style="color: var(--text-muted); margin-left: 8px;">→ ${log.new_status.toUpperCase()}</span>` : ''}
+        </div>
+        ${isContentGenCompleted ? `
+          <div style="margin-top: 8px;">
+            <button class="btn view-output-btn" data-task-id="${log.task_id}" data-log-id="${log.log_id}" style="padding: 4px 8px; font-size: 11px; background: rgba(37, 99, 235, 0.2); color: var(--primary);">
+              ${isExpanded ? 'Hide Output Data' : 'View Output Data'}
+            </button>
+            <div id="output-${log.log_id}" style="display: ${isExpanded ? 'block' : 'none'}; margin-top: 8px; font-size: 12px; background: rgba(0,0,0,0.5); padding: 8px; border-radius: 4px; overflow-x: auto; color: var(--text-main);">
+              ${expandedOutputs[log.log_id] || ''}
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
+}
+
+// ── helper: attach 'View Output Data' click handlers ────────────────────────
+function attachOutputBtnListeners() {
+  document.querySelectorAll('.view-output-btn').forEach(btn => {
+    // Prevent double-binding
+    const el = btn as HTMLButtonElement;
+    if (el.dataset.bound) return;
+    el.dataset.bound = '1';
+
+    el.addEventListener('click', async () => {
+      const taskId = el.getAttribute('data-task-id');
+      const logId = el.getAttribute('data-log-id');
+      if (!taskId || !logId) return;
+
+      if (expandedOutputs[logId] !== undefined) {
+        delete expandedOutputs[logId];
+        el.textContent = 'View Output Data';
+        const resDiv = document.getElementById(`output-${logId}`);
+        if (resDiv) resDiv.style.display = 'none';
+        return;
+      }
+
+      expandedOutputs[logId] = 'Loading...';
+      el.textContent = 'Hide Output Data';
+      const resDiv = document.getElementById(`output-${logId}`);
+      if (resDiv) { resDiv.style.display = 'block'; resDiv.innerHTML = 'Loading...'; }
+
+      try {
+        const result = await ApiService.getTaskResult(taskId);
+        let data = result?.output_data;
+
+        if (data && data.content_id && !data.body && currentCompanyId) {
+          try {
+            const content = await ApiService.getSingleContent(currentCompanyId, data.content_id);
+            if (content) data = content;
+          } catch (e) {
+            console.warn('Failed to enrich content from NoSQL:', e);
+          }
+        }
+
+        expandedOutputs[logId] = data ? formatContentData(data) : `<span style="color: var(--warning);">No output data found.</span>`;
+      } catch (err: any) {
+        expandedOutputs[logId] = `<span style="color: var(--error);">Error: ${err.message}</span>`;
+      }
+
+      const div = document.getElementById(`output-${logId}`);
+      if (div) div.innerHTML = expandedOutputs[logId];
+    });
+  });
+}
+
 function renderLogs() {
-  if (logPollInterval) clearInterval(logPollInterval);
-  
+  // Tear down any existing realtime channel
+  if (logRealtimeChannel) {
+    supabase.removeChannel(logRealtimeChannel);
+    logRealtimeChannel = null;
+  }
+
   if (!currentCompanyId) {
     viewContainer.innerHTML = `<div class="empty-state">Please onboard a company first.</div>`;
     return;
@@ -579,113 +874,74 @@ function renderLogs() {
     <div class="card" style="margin-bottom: 24px;">
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <h2>Live Agent Activity</h2>
-        <div class="status-badge active">Polling Live...</div>
+        <div class="status-badge active" style="display: flex; align-items: center; gap: 6px;">
+          <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--success); display: inline-block; animation: pulse 1.5s infinite;"></span>
+          Realtime
+        </div>
       </div>
     </div>
     <div id="logs-container" class="log-stream"></div>
   `;
 
-  const fetchLogs = async () => {
-    try {
-      const data = await ApiService.getTaskLogs(currentCompanyId!);
-      const container = document.getElementById('logs-container');
-      if (!container) return;
+  // ── 1. Load existing logs via REST ───────────────────────────────────────
+  ApiService.getTaskLogs(currentCompanyId!).then(data => {
+    const container = document.getElementById('logs-container');
+    if (!container) return;
 
-      if (data.total === 0) {
-        container.innerHTML = `<div class="empty-state">No activity logs yet. The agents might be sleeping.</div>`;
-        return;
-      }
-
-      container.innerHTML = data.logs.map((log: TaskLog) => {
-        const time = new Date(log.timestamp).toLocaleTimeString();
-        const isContentGenCompleted = log.agent === 'content_generator' && log.new_status === 'completed';
-        const isExpanded = expandedOutputs[log.log_id] !== undefined;
-
-        return `
-          <div class="log-entry ${log.event}">
-            <div class="log-time">${time}</div>
-            <div class="log-content">
-              ${log.agent ? `<div class="log-agent">${log.agent}</div>` : ''}
-              <div class="log-message">
-                <strong>[${log.event.toUpperCase()}]</strong> ${log.message} 
-                ${log.new_status ? `<span style="color: var(--text-muted); margin-left: 8px;">→ ${log.new_status.toUpperCase()}</span>` : ''}
-              </div>
-              ${isContentGenCompleted ? `
-                <div style="margin-top: 8px;">
-                  <button class="btn view-output-btn" data-task-id="${log.task_id}" data-log-id="${log.log_id}" style="padding: 4px 8px; font-size: 11px; background: rgba(37, 99, 235, 0.2); color: var(--primary);">
-                    ${isExpanded ? 'Hide Output Data' : 'View Output Data'}
-                  </button>
-                  <div id="output-${log.log_id}" style="display: ${isExpanded ? 'block' : 'none'}; margin-top: 8px; font-size: 12px; background: rgba(0,0,0,0.5); padding: 8px; border-radius: 4px; overflow-x: auto; color: var(--text-main);">
-                    ${expandedOutputs[log.log_id] || ''}
-                  </div>
-                </div>
-              ` : ''}
-            </div>
-          </div>
-        `;
-      }).join('');
-      
-      // Attach click listeners
-      document.querySelectorAll('.view-output-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          const target = e.target as HTMLButtonElement;
-          const taskId = target.getAttribute('data-task-id');
-          const logId = target.getAttribute('data-log-id');
-          if (!taskId || !logId) return;
-
-          if (expandedOutputs[logId] !== undefined) {
-             delete expandedOutputs[logId];
-             target.textContent = 'View Output Data';
-             const resDiv = document.getElementById(`output-${logId}`);
-             if (resDiv) resDiv.style.display = 'none';
-          } else {
-             expandedOutputs[logId] = 'Loading...';
-             target.textContent = 'Hide Output Data';
-             const resDiv = document.getElementById(`output-${logId}`);
-             if (resDiv) {
-               resDiv.style.display = 'block';
-               resDiv.innerHTML = 'Loading...';
-             }
-
-             try {
-               const result = await ApiService.getTaskResult(taskId);
-               if (result && result.output_data) {
-                 const formatted = `<pre style="margin:0; white-space:pre-wrap;">${JSON.stringify(result.output_data, null, 2)}</pre>`;
-                 expandedOutputs[logId] = formatted;
-               } else {
-                 expandedOutputs[logId] = `<span style="color: var(--warning);">No output data found.</span>`;
-               }
-             } catch (err: any) {
-               expandedOutputs[logId] = `<span style="color: var(--error);">Error: ${err.message}</span>`;
-             }
-             
-             // Update DOM immediately since poll might be 3 seconds away
-             const currentResDiv = document.getElementById(`output-${logId}`);
-             if (currentResDiv) {
-               currentResDiv.innerHTML = expandedOutputs[logId];
-             }
-          }
-        });
-      });
-
-    } catch (err) {
-      console.error('Failed to fetch logs:', err);
+    if (data.total === 0) {
+      container.innerHTML = `<div class="empty-state">No activity yet — waiting for the agents to wake up.</div>`;
+    } else {
+      container.innerHTML = data.logs.map(renderLogEntry).join('');
+      attachOutputBtnListeners();
     }
-  };
+  }).catch(err => console.error('Failed to load initial logs:', err));
 
-  fetchLogs();
-  logPollInterval = setInterval(fetchLogs, 3000);
+  // ── 2. Subscribe to realtime INSERTs on task_logs ────────────────────────
+  logRealtimeChannel = supabase
+    .channel(`task_logs:${currentCompanyId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'task_logs',
+        filter: `company_id=eq.${currentCompanyId}`,
+      },
+      (payload) => {
+        const newLog = payload.new as TaskLog;
+        const container = document.getElementById('logs-container');
+        if (!container) return;
+
+        // Replace empty-state placeholder if still showing
+        const emptyState = container.querySelector('.empty-state');
+        if (emptyState) emptyState.remove();
+
+        // Prepend the new entry (newest first)
+        const div = document.createElement('div');
+        div.innerHTML = renderLogEntry(newLog).trim();
+        const entry = div.firstElementChild as HTMLElement;
+        container.insertBefore(entry, container.firstChild);
+
+        // Bind output button if it appeared
+        attachOutputBtnListeners();
+      }
+    )
+    .subscribe((status) => {
+      console.log('[Realtime] task_logs subscription status:', status);
+    });
 }
 
-// Custom route change cleanup
+// Custom route change cleanup — remove realtime channel on navigate away
 const originalNavigateTo = navigateTo;
 // @ts-ignore
-window.navigateTo = function(route: string) {
-  if (logPollInterval) {
-    clearInterval(logPollInterval);
-    logPollInterval = null;
+window.navigateTo = function (route: string) {
+  if (logRealtimeChannel) {
+    supabase.removeChannel(logRealtimeChannel);
+    logRealtimeChannel = null;
   }
   originalNavigateTo(route);
 };
 
 init();
+
+
