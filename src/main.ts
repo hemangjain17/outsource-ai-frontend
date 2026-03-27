@@ -504,9 +504,16 @@ async function renderCampaigns() {
                     <button class="btn view-result-btn" data-task-id="${slot.content_task_id}" style="width: 100%; padding: 8px; font-size: 12px;">View Generation Task Result</button>
                     <div id="result-${slot.content_task_id}" style="display: none; margin-top: 8px; font-size: 12px; background: rgba(0,0,0,0.5); padding: 8px; border-radius: 4px; overflow-x: auto;"></div>
                   </div>
+                ` : matchedContent ? `
+                  <div style="margin-top: 12px; border-top: 1px dashed var(--border-light); padding-top: 12px;">
+                    <details>
+                      <summary style="cursor: pointer; font-size: 12px; padding: 8px; background: rgba(16, 185, 129, 0.1); color: var(--success); border-radius: 4px; text-align: center; list-style: none;">✓ View Generated Content</summary>
+                      <pre style="margin-top: 8px; font-size: 11px; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px; overflow-x: auto; color: var(--text-main); white-space: pre-wrap;">${JSON.stringify(matchedContent.data, null, 2).replace(/</g, '\\u003c')}</pre>
+                    </details>
+                  </div>
                 ` : '<div style="font-size: 12px; color: var(--warning); text-align: center; margin-top: 12px; padding: 8px; background: rgba(245, 158, 11, 0.1); border-radius: 4px;">Pending Generation</div>'}
                 
-                ${matchedContent ? `
+                ${matchedContent && slot.content_task_id ? `
                   <div style="margin-top: 8px; font-size: 12px; color: var(--success); text-align: center; padding: 4px; background: rgba(16, 185, 129, 0.1); border-radius: 4px;">✓ Content Available in DB</div>
                 ` : ''}
               </div>
@@ -558,6 +565,7 @@ async function renderCampaigns() {
 }
 
 let logPollInterval: any = null;
+let expandedOutputs: Record<string, string> = {};
 
 function renderLogs() {
   if (logPollInterval) clearInterval(logPollInterval);
@@ -590,6 +598,9 @@ function renderLogs() {
 
       container.innerHTML = data.logs.map((log: TaskLog) => {
         const time = new Date(log.timestamp).toLocaleTimeString();
+        const isContentGenCompleted = log.agent === 'content_generator' && log.new_status === 'completed';
+        const isExpanded = expandedOutputs[log.log_id] !== undefined;
+
         return `
           <div class="log-entry ${log.event}">
             <div class="log-time">${time}</div>
@@ -599,11 +610,64 @@ function renderLogs() {
                 <strong>[${log.event.toUpperCase()}]</strong> ${log.message} 
                 ${log.new_status ? `<span style="color: var(--text-muted); margin-left: 8px;">→ ${log.new_status.toUpperCase()}</span>` : ''}
               </div>
+              ${isContentGenCompleted ? `
+                <div style="margin-top: 8px;">
+                  <button class="btn view-output-btn" data-task-id="${log.task_id}" data-log-id="${log.log_id}" style="padding: 4px 8px; font-size: 11px; background: rgba(37, 99, 235, 0.2); color: var(--primary);">
+                    ${isExpanded ? 'Hide Output Data' : 'View Output Data'}
+                  </button>
+                  <div id="output-${log.log_id}" style="display: ${isExpanded ? 'block' : 'none'}; margin-top: 8px; font-size: 12px; background: rgba(0,0,0,0.5); padding: 8px; border-radius: 4px; overflow-x: auto; color: var(--text-main);">
+                    ${expandedOutputs[log.log_id] || ''}
+                  </div>
+                </div>
+              ` : ''}
             </div>
           </div>
         `;
       }).join('');
       
+      // Attach click listeners
+      document.querySelectorAll('.view-output-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const target = e.target as HTMLButtonElement;
+          const taskId = target.getAttribute('data-task-id');
+          const logId = target.getAttribute('data-log-id');
+          if (!taskId || !logId) return;
+
+          if (expandedOutputs[logId] !== undefined) {
+             delete expandedOutputs[logId];
+             target.textContent = 'View Output Data';
+             const resDiv = document.getElementById(`output-${logId}`);
+             if (resDiv) resDiv.style.display = 'none';
+          } else {
+             expandedOutputs[logId] = 'Loading...';
+             target.textContent = 'Hide Output Data';
+             const resDiv = document.getElementById(`output-${logId}`);
+             if (resDiv) {
+               resDiv.style.display = 'block';
+               resDiv.innerHTML = 'Loading...';
+             }
+
+             try {
+               const result = await ApiService.getTaskResult(taskId);
+               if (result && result.output_data) {
+                 const formatted = `<pre style="margin:0; white-space:pre-wrap;">${JSON.stringify(result.output_data, null, 2)}</pre>`;
+                 expandedOutputs[logId] = formatted;
+               } else {
+                 expandedOutputs[logId] = `<span style="color: var(--warning);">No output data found.</span>`;
+               }
+             } catch (err: any) {
+               expandedOutputs[logId] = `<span style="color: var(--error);">Error: ${err.message}</span>`;
+             }
+             
+             // Update DOM immediately since poll might be 3 seconds away
+             const currentResDiv = document.getElementById(`output-${logId}`);
+             if (currentResDiv) {
+               currentResDiv.innerHTML = expandedOutputs[logId];
+             }
+          }
+        });
+      });
+
     } catch (err) {
       console.error('Failed to fetch logs:', err);
     }
