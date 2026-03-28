@@ -13,6 +13,7 @@ OutSourceAI is an **Agentic AI Orchestration Platform** designed to automate end
 OutSourceAI isn't just a dashboard; it's a **virtual workforce management system**. Traditional outsourcing is slow and expensive; OutSourceAI provides a scalable, 24/7 alternative using **Large Language Models (LLMs)** and **Autonomous Agents**.
 
 ### The Agentic Workforce:
+
 - **🕵️ Strategist**: Analyzes industry trends and competitive landscapes.
 - **📅 Planner**: Crafts long-term content calendars and tactical roadmaps.
 - **✍️ Content Generator**: Produces high-quality, brand-consistent copy for LinkedIn, X (Twitter), and Blogs.
@@ -24,48 +25,41 @@ OutSourceAI isn't just a dashboard; it's a **virtual workforce management system
 
 ## 💻 Frontend Features
 
-The OutSourceAI Frontend provides a **Glassmorphic, High-Performance Dashboard** built with Vanilla TypeScript and Vite, ensuring zero overhead and maximum responsiveness.
+The OutSourceAI Frontend provides a **High-Performance Dashboard** ensuring zero overhead and maximum responsiveness.
 
 ### Key Modules:
+
 - **📊 Overview Dashboard**: Visualizes your agentic workforce's health, total campaigns, and generated content throughput.
 - **🏢 Enterprise Onboarding**: A streamlined workflow to ingest company data, brand voice, and social handles.
 - **🗓️ Campaign Management**: An interactive content calendar where users can preview generated social posts, request revisions from agents, or approve them for scheduling.
 - **⚡ Real-time Pipeline Logs**: Powered by **Supabase Realtime**, this module provides a live feed of agent "thoughts," status changes, and task completions.
 - **📝 Task Assignment**: Allows manual intervention by assigning specific prompts or targets to individual agents.
 
----
-
-## 🛠️ Tech Stack
-
-- **Core**: Vanilla TypeScript (SPA Architecture)
-- **Tooling**: Vite (Lightning-fast HMR)
-- **Database/Realtime**: Supabase + PostgreSQL
-- **Styling**: Modern CSS with Glassmorphism, CSS Variables, and responsive Grid/Flexbox layouts.
-- **Font**: Inter & Space Grotesk via Google Fonts.
-
----
-
 ## 🚀 Getting Started
 
 ### Prerequisites
+
 - [Node.js](https://nodejs.org/) (v18+)
 - [npm](https://www.npmjs.com/) or [yarn](https://yarnpkg.com/)
 
 ### Installation
 
 1. **Clone the repository**:
+
    ```bash
    git clone https://github.com/your-username/outsource-ai.git
    cd outsource-ai-frontend
    ```
 
 2. **Install dependencies**:
+
    ```bash
    npm install
    ```
 
 3. **Environment Setup**:
    Create a `.env` file in the root directory:
+
    ```env
    VITE_SUPABASE_URL=your_supabase_url
    VITE_SUPABASE_ANON_KEY=your_supabase_key
@@ -76,27 +70,3 @@ The OutSourceAI Frontend provides a **Glassmorphic, High-Performance Dashboard**
    ```bash
    npm run dev
    ```
-
----
-
-## 📦 Deployment
-
-To build the project for production:
-
-```bash
-npm run build
-```
-
-The output will be generated in the `dist/` directory, optimized and ready for hosting on Vercel, Netlify, or AWS S3.
-
----
-
-## 🤝 Contributing
-
-OutSourceAI is a rapidly evolving platform. If you're interested in improving the agentic experience or dashboard UI, please feel free to open a PR or Issue.
-
----
-
-<div align="center">
-  Built with ❤️ by the OutSourceAI Team
-</div>
