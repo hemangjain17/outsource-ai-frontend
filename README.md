@@ -17,7 +17,7 @@ OutSourceAI isn't just a dashboard; it's a **virtual workforce management system
 - **🕵️ Strategist**: Analyzes industry trends and competitive landscapes.
 - **📅 Planner**: Crafts long-term content calendars and tactical roadmaps.
 - **✍️ Content Generator**: Produces high-quality, brand-consistent copy for LinkedIn, X (Twitter), and Blogs.
-- **🎨 Designer**: Generates visual briefs and integrates with Figma/Canvas for creative assets.
+- **🎨 Designer**: Generates visual briefs and integrates with Figma or Canvas for creative assets.
 - **🛡️ Compliance & Analyst**: Ensures brand safety and tracks performance metrics.
 - **👔 Manager**: Orchestrates the entire team, handling feedback loops and task delegation.
 
